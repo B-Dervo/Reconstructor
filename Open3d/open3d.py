@@ -95,3 +95,6 @@ def register_one_rgbd_pair3(s, t, color_files, depth_files, intrinsic,
         o3d.pipelines.odometry.RGBDOdometryJacobianFromHybridTerm(), option)
     return [success, trans, info]
 
+#python run_system.py D:\git\reconstructor\tmp\t11_1_single\config.json --make --register --refine --integrate
+
+#python run_system.py D:\git\reconstructor\tmp\t11\config.json --integrate

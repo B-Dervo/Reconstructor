@@ -321,20 +321,20 @@ def createConfig(folder, d_scale = 1000):
     # current d_scale:  999.9999389648438
                     #   999.9999389648438
     if d_scale == 1000:
-        with open("G:/git/Reconstructor/tmp/"+folder+"/intrinsic.json") as intr_file:
+        with open("D:/git/reconstructor/tmp/"+folder+"/intrinsic.json") as intr_file:
             intr = json.load(intr_file)
         d_scale = intr["depth_scale"]
     file = {
         "name": folder+" reconstruction",
-        "path_dataset": "G:/git/Reconstructor/tmp/"+folder+"/",
-        "path_intrinsic": "G:/git/Reconstructor/tmp/"+folder+"/intrinsic.json",
-        "max_depth": 0.7, #in meters
+        "path_dataset": "D:/git/reconstructor/tmp/"+folder+"/",
+        "path_intrinsic": "D:/git/reconstructor/tmp/"+folder+"/intrinsic.json",
+        "max_depth": 1.0, #in meters
         "voxel_size": 0.01,
         "max_depth_diff": 0.07,
         "preference_loop_closure_odometry": 0.1,
         "preference_loop_closure_registration": 5.0,
         "tsdf_cubic_size": 0.4,
-        "icp_method": "color",
+        "icp_method": "point_to_plane",
         "global_registration": "ransac",
         "python_multi_threading": False,
         "n_frames_per_fragment": 100,

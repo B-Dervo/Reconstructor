@@ -1,4 +1,5 @@
 from sensorReader import readSensor2
+from semantic import processColor
 from mergeClouds import trajectory_merger
 from meshMaker import toMesh_v1 as toMesh
 import open3d as o3d
@@ -53,7 +54,8 @@ def pyRs2ManualD435(bag_file):
 
 
 
-folder = ["t11"]
+#folder = ["t11_1_single"]
+folder = ["t11_2_neighbour"]
 
 # currently main.py must be run two times. once first, then second after the Open3D has been run. 
 # Will later try and integrate Open3D - reconstruction_system example into this version. 
@@ -66,9 +68,10 @@ if step_1:
         #o3dManual("tmp/"+f+"/stream/D435.bag")
         #o3dAuto("tmp/"+f+"/stream/D435.bag")
         #pyRs2ManualD435("tmp/"+f+"/stream/D435.bag")
-        readSensor2.processBag("tmp/"+f+"/stream/D435.bag", "tmp/"+f+"/stream/T265.bag", f)
+        #readSensor2.processBag("tmp/"+f+"/stream/D435.bag", "tmp/"+f+"/stream/T265.bag", f)
         #trajectory_merger.createPointCloudsFromDepth(f,400)
-        #trajectory_merger.createPointCloudsFromDepth3(f,400)
+        trajectory_merger.createPointCloudsFromDepth3(f,400)
+        #processColor.changeFormat(f)
 else:
     for f in folder:
         trajectory_merger.createPointCloudsFromDepth3(f,400)

@@ -1,0 +1,220 @@
+\chapter{Technical approach} % create a chart showing each step.
+This chapter will present how I found a solution for the research objectives as described in the introduction \ref{c1:resObj}. Each of the individual research objective fit into a pipeline with 4 modules. 
+%There has not been found an existing solution that takes footage from a RGBD camera and a pose camera, and develop a 3d-model from the footage. There are in addition no way to project semantic segmentation results, like crack detection results, onto a 3d-model. [Additional issue is that both the semantic segmentation and the reconstruction field are relatively new fields and are currently controlled by improving benchmarks, the goals here falls outside of any benchmark goals]. A pipeline will need to be developed to find the efficiency of using reconstruction to convey crack detection results. This pipeline will have modules that will have to solve a set of issues. 
+Figure \ref{fig:moduleBreak} provides an overview of how this pipeline are developed. The description of each module start with start with constraints and requirements for the module, and what output to be provided to the next module. Module 1 will be about recording the environment. Module 2 will be about extracting the data to a correct format for the crack detection module and prepare the data for reconstruction into a 3d-model. Module 3 will be about combining the depth, color and pose data into a textured 3D-model. Module 4 will be about applying a semantic segmentation result onto a model as a texture. The external module is provided by DNV. 
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/Module description_v03.png}
+    \caption{Description of module breakdown and brief overview of each modules tasks and relations to other tasks. }
+    \label{fig:moduleBreak}
+\end{figure}
+
+%Reconstruction system, a pipeline in Open3D made for building a 3D-model from RGBD video data, provide the basis for the pipeline imagined for this thesis. The pipeline have not included a way to use data from a pose estimation camera.
+
+
+
+%Reconstruction System from Open3D is a promising method for creating a 3d-model from the recordings of the D435i Depth camera by inserting its depth and color frame data and export a meshed model that is textured. Its method for manually exporting data from the bag file leaves room for inserting the pose estimation for each frame too. In the tutorial description of JackJack \footnote{\href{http://www.open3d.org/docs/release/tutorial/sensor/RealSense.html}{Open3D JackJack example}} from Open3D It is presented through their  example that the texture output should be optimised using their example to create a more precise texture representation. A rough way to measure results between various tests is to create a point cloud for each frame and apply the estimated poses from the pose tracking camera, and then add all together as they then share the same world origin. One can also apply a processed pose to a point cloud and add all shifted point clouds together. Both of these will be used to make an impression of how a result will improve or not. Applying crack detection results on the model is planned to do by modifying the optimisation result or creating my own solution. 
+
+
+
+
+
+%The overall structure of this pipeline can be broken down into 5 modules, plus the external crack detection module. As seen in \cref{fig:moduleBreak}, each module will be broken into sub-tasks recognisable from the Reconstruction system and Optimisation method from Open3D and any modifications will be mentioned. 
+
+%Through this chapter I will break down the modules used to achieve 3D-reconstruction. Each module connected together as seen in \cref{fig:moduleBreak}. Starting with: Record scene, extract data from cameras, process data to make point cloud, convert point cloud to a mesh, create a color texture and semantic texture for the mesh. Each module will describe what it needs to produce for the next module, what options for achieving this is available, the various test and methods done to achieve result, methods that did not work, then describe the final solution for achieving this. 
+
+\section{Object to scan and reconstruct}
+
+\begin{wrapfigure}{r}{0.45\textwidth} 
+    \centering
+    \includegraphics[width=0.45\textwidth]{figures/three_tbars.jpg}
+    \caption{The three T-bars provided by DNV-GL to be used for reconstruction}
+    \label{fig:three_bars}
+\end{wrapfigure}
+
+% image of the three t-bars 
+The objects to be scanned is three T-bars that originally were created for testing coats of paint on steel surfaces. This testing included stress and weathering tests. The T-bars thus have rust-marks protruding from where the paint has been chipped away, and cracks in the paint along where the welding seam of the two parts forming the T-bar. Four other different objects were added to the scene to understand how well a reconstruction result were. These objects were a bits-box, a filter mask, an x-box controller and a miniature model container, a computer mouse. These objects are distinct in shape and will also be easy to recognise when looking at a random section of a point cloud from the data-set. The area that the objects was placed in, has been both a table top and a taped up 60x60 cm area. The later were preferred as the start and stop spot for the camera rig would also be marked. This area will hear-by be refereed to as the target recording area. 
+
+[picture of table top with t-bar surounded by objects.]
+[picture of floor with t-bar surrounded by objects, and triangle in view.]
+
+
+
+% image of table with distinct objects and t-bars. 
+%- clean table with only t-bar
+
+%The T-bar were first placed on a 75x75 cm table to enclose the immediate area around the T-bar. And later moved to a floor section taped up to be 60x60 cm with a cross, this to see how textures from multiple images aligned. 
+
+%- cluttered table 
+
+%- clean floor with only box
+
+%- cluttered floor with t-bar ++ 
+
+\section{Module 1 - Scanning the object scene}
+
+Module 2 will require a recording of the object scene from the RealSense T265 named \textit{T265.bag}, a recording of the object scene from the RealSense D435i named \textit{D435.bag}. The two recording sessions need to be recorded with the same movement so that they can be synchronised. The RealSense D435i has an infrared light that is used to estimate distance to featureless surfaces and do not work when sunlight is present.
+
+A mounting bracket is the best solution for recording a session with shared movement between the two cameras, as described by Tsykunov \cite{tsykunov2020}. A 3D-printable bracket design was provided by Intel here\footnote{3D-printable mounting bracket available at: \url{https://github.com/IntelRealSense/realsense-ros/blob/occupancy-mapping/realsense2_camera/meshes/mount_t265_d435.stl}}. Figure \ref{fig:bracket} show the RealSense D435i and T265 cameras mounted onto the 3D-printed mount. The actual recording of a scene is handled using the RealSense Viewer software which act as a controller for connected RealSense devices and shows in real time what the cameras and sensors register. This software also becomes important when aiming the camera bracket by hand as it shows you what the cameras sees at any time during the recording.
+
+\begin{figure}[h]
+    \includegraphics[width=1.0\textwidth]{figures/camera_bracket.jpg}
+    \caption{Intel RealSense D435i depth camera (top) and Intel RealSense T265 position tracking camera (bottom) mounted on 3D-printed bracket for shared movement.}
+    \centering
+    \label{fig:bracket}
+\end{figure}
+
+During a recording session some rules were developed and adopted to create consistency, and to secure a most optimal output. The rules were as following: 
+\begin{itemize}
+    \item RealSense D435i Depth camera 
+    \begin{itemize}
+        \item Keep a minimum distance to the closest object of at least 0.3 meters, the closest depth measurement distance of D435i.
+        \item The maximum distance from the D435i is 3 meters, but may be shortened in the Reconstruction System algorithm for time-saving reasons. This thesis will operate with a maximum recording distance of 1 meter since the scene to be reconstructed fits within a 60x60cm square. 
+        \item Depth and color recording must have the same frames per second and frame resolution. This was set to 30 fps and 1280x720 resolution. 
+        \item Fast movement and rotation can easily lead to blurry color-frames, move at a approximately 1 meter per second to avoid unnecessary blurring. Further testing to find limits is needed. 
+        \item Ensure that each frame from the depth camera has a position by activating the T265 position tracking camera first, then the D435i depth camera after. When done recording stop the D435i depth camera first, then stop the T265 tracking camera last. 
+    \end{itemize}
+    \item RealSense T265 - position tracking camera
+    \begin{itemize}
+        \item The T265 works best in a static world, any additional interference, like people in the cameras field of vision should be kept to an absolute minimum. A handheld rig tilting slightly down may lead to the camera catching the feet of the rig carrier, and become extra disturbance in the position estimation algorithm. How much it disturbs will not be tested in this thesis.  
+    \end{itemize}
+    \item Environment and scene 
+    \begin{itemize}
+        \item In module 3 each point remove all points that is more then a given distance to reduce processing time. Create a bounding box of the scene and keep all objects to be scanned within. 
+        \item Any strong light, facing directly at or via reflective surfaces is a disturbance to the depth camera and may add unwanted noise or overexposure to the camera. Try and record in a environment with soft light, and few reflective surfaces. 
+    \end{itemize}
+\end{itemize}
+
+
+The scene were recorded by walking around the target recording area, pointing the camera rig towards the center of the main object. It was reasoned that starting and ending the recording session on the same spot will assist with any use of loop closure. The RealSense Viewer UI were used for real-time aiming of the camera rig. There were several recording sessions however, one of the recording sessions will be referenced to throughout the report. Test 11, named \textit{t11} for short, is one of the later recordings and is available for download and can be used to reproduce the result from this thesis. \textit{t11} can be accessed in the link \footnote{\textit{t11} recording session available at: \url{https://drive.google.com/file/d/131TbmoZy8RP5gwGDN4HiHyRzEbwX5cva/view?usp=sharing}}
+
+
+
+\section{Module 2 - Extracting scanned data}
+Module 3 need a folder named \textit{color} that contain all extracted RGB-frames from a recorded session, a folder named \textit{depth} that contain a Depth frame for each RGB-frame linked through name, a folder named \textit{pose} that contain a Pose for each RGB-frame linked through name. A file named \textit{intrinsics.json} with information about the RealSense D435i camera that is needed for reading the data correctly, and a file named \textit{config.json} containing for setting parameters for Open3Ds Reconstruction system pipeline. The external crack detection module need a folder with all RGB-frames from the recorded session.
+
+
+\begin{wrapfigure}{r}{0.45\textwidth}
+    \includegraphics[width=0.45\textwidth]{figures/pc/depthFrameExample.png}
+    \caption{Frame 0 from the t11 project recording, colorized based on depth. The cube to the left show the dimensional colorization of the three dimensions. The green section in front shows the focus area, and the side of the three closest object protruding from the floor. The black and red section in the back is part of the wall and hallway.}
+    \centering
+    \label{fig:depthFrame}
+\end{wrapfigure}
+
+litt omvalg av 
+
+
+i tanken, lidar + dybdekamera
+
+
+
+%There are three options between Open3D and pyRealSense2; Open3Ds automatic bag extractor, Open3Ds per frame reader, and pyRealSense2s per frame reader. The chosen way to extract and process the data would be to first runn the automatic bag estractor to get the intrinsics file, then use pyRealSense2 to extract depth, color and position data. The figure below give a brief description of the code overview. 
+
+%add line breaks instead of tab. 
+
+\subsection{Reading data}
+
+Open3D has a method for reading bag data, which include an automatic bag extracting method. This method is not viable as there is no good way to synchronise the video-stream from RealSense D435i and T265, in addition the later can not be read in the Open3D library. Intel has released a Python wrapper for their C++ SDK named \textit{pyrealsense2}\footnote{Link to pyrealsense documentation: \url{https://intelrealsense.github.io/librealsense/python_docs/_generated/pyrealsense2.html}}. This Python wrapper were used for extracting the data, then syncing the extracted data from the two cameras. An example for how to read a D435is recorded session from a \textit{*.bag} file and save each depth and color-frame using pyrealsense2 can be found in Appendix \ref{lst:bagReader}. An issue that has not been solved is that pyrealsense2 can only read a bag file as a video stream. All depth frames were stored with a larger field of view then the RGB-frame it was connected to, a way to handle this is to crop the borders of the depth frame by 15\% and rescale it up to the original size. A flaw that may result in skipped frames, with the used setup a RealSenseD435i recorded at 30 frames per second may skip around every 6th frame, and a RealSense T265 recording at 120 frames per second read every 5th frame. This is not a large issue, but worth noting. Each time the RGBD-frame is read the timestamp is also read and stored in a file named \textit{timestampRGBD.json} file for later syncing with the RealSense T265. The stream from RealSense T265 is read in a same manner with each frames position and the timestamp being stored in a file named \textit{timestampPose.json}. [Croping and rescaling depth-frames ]
+
+\subsection{Synchronizing extracted data}
+The two cameras has different frame rate and the average frame will on average not have an exact match. Each RGBD-frame were assigned the closest pose by comparing the timestamps. The closest match for each RGBD-frame is saved in a folder named \textit{pose} as a numpy 4x4 matrix with the same name as the RGBD-frame it was matched with. A more accurate method would be to do a linear interpolation between the closest pose by time in before and after a given RGBD frame. This will give a slight better prediction of where a position is, however not by a large margin.
+
+\subsection{Code breakdown}
+
+The function processBag() was written with 5 steps, as seen in \ref{fig:procBag}, the actual code can be found in Appendix \ref{lst:readSensor2}. Step one, extracting the intrinsics file, is handeled by Open3D. Step two, extracting the color and depth images and the connected timestamps, is done using pyRealSense2 and saving a frames timestamp as a list in the "timestampRGBD.json" file. The color and depth map is saved in the respective "color/" and "depth/" folder named as the frame number it was. Step three, extracting the positions and the connected timestamp, convertes the estimated position from a position plus quaternion to a 4x4 position matrix and the timestamp, this is then stored in the "timestampPose.json". Step 4, aligning frames, reads the two *.json files described above and finds for each object in the timestampRGBD list the closest match by timestamp, the match stores the position matrix in the "poses/" folder as a "*.npy" file named after the RGBD frame it is connected to. Step 5, creating a config, is creating the "config.json" Open3D require to run. The parameters I did most experiments with were frames per fragment, key frames per frame and icp method. More on those when presenting the results. 
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/ProcessBagFunc.png}
+    \caption{The function ProcessBag() and what each step does and what each part interacts with in the project folder. }
+    \label{fig:procBag}
+\end{figure}
+
+%\subsection{Methods for bag-extraction}
+%The items that needs to be solved is finding the best way to extract the data from the files, and to connect the position data to a specific frame. The D435i and T265 has no way of communicating with each other. We will start with the options for extracting the data. pyRealsense2 from Intel includes a method for reading recorded sessions from a series of Depth and Position cameras, including the Intel D435i and Intel T265. Reconstruction system from Open3D is utilising an automatic bag extraction method. Open3D provide in addition methods for manually reading bag files. Open3Ds bag reading function can only extract data from an RGBD camera, like the Intel D435i, and not a pose camera, like the Intel T265. It was noted that automatic activation of Reconstruction system is using a different bag reader feature named \texttt{o3d.t.io.RGBDVideoReader()}, which is not the same that is used in the example code provided \texttt{o3d.t.io.RSBagReader()}. There has been found no major difference, other then a possible time to complete difference, any actuall difference has not been explored further into for time constraint. It was found that the different options for data extraction extracted a different amount of frames each time when extracting data from the D435i. A test was performed to find how the three methods compared, results at \ref{section:d435frameExport}. Finding that the pyRealSense2 is the most reliable method extracting the most amount of frames, and were elected for extracting the color and depth frame-set from D435i depth camera bag recordings. Reconstruction system also require referencing to an intrinsics.json file which contain an intrinsic matrix from the D435i camera, and a \texttt{depth\_scale} parameter which state the distance per increment in the depth image. This \texttt{depth\_scale} value must also be copied into the config.json file used to activate Reconstruction system, more on this will come in description of next module. When reconstructing a point cloud from a depth image one will need two additional parameters. An intrinsic matrix which defines a cameras lens distortion, and a depth scale defining what distance is between each band in the color range of the image. The default for RGBD cameras is 1mm per band. The band range may differ from camera to camera, and the \texttt{depth\_scale} accounts for this variance.Tests using Open3Ds automatic bag extraction methods provided a sufficient results when used as input for Reconstruction System. But using manually exported data from PyRealSense2 as input provided very bad results. Several potential sources to the problem were explored. The next section summarise the possible sources of the problem.
+
+%\subsection{Finding solution wit manual pyRealSense2 method as input to Reconstruction System}
+%It was theorised for a while that wrong-full reading of the \texttt{depth\_scale} parameter was the reason for a lack of a sufficient reconstructed model. It was found that when using a bag file as input that Reconstruction system ran through a script that included reading the \texttt{depth\_scale} parameter in the Intrinsics.json file and saving it in the config.json file. It was found a variance in the reading of the depth scale parameter using pyRealsense2 and Open3D to have a difference of 0.00000X millimeter and was therefore dismissed as the cause for difference in Reconstruction system output. It will still be recommended for the sake of consistency to read the depth scale and store it in both intrinsic and config file. Another parameter that was explored was the frames exported, while the recorded sessions had a frames per second of 30, exporting it usually skipped every 6ht frames when using pyRealSense2, and even more  frames  for Open3D. This was debunked when recording a session with a base of 15 frames per second, the results here were worse wit the working Open3D method and notwithin acceptable results using any methods for export via pyRealSense2. 
+ 
+%The actual reason was found when comparing depth images from the different methods. Open3Ds automatic methods cropped all borders of the depth frame by approximately 15\%, then up-scaled it to the preferred resolution. Thus cropping and scaling of depth images was found when trying to find a workaround for connecting an rgbd image exported using an automatic Open3D method with a position estimate, by finding image matches. More on this later. Cropping and scaling the exported depth images from pyRealSense2 bag reading method by 15\% provided a sufficient result. 
+
+
+%\subsection{Synchronizing RGBD and pose streams}
+%To test if using position estimation data makes a positive difference when reconstructing a scene, each RGBD frame will need to itself an estimated position. The D435i and T265 do not have a way to syncing a recorded session. They do however both save a timestamp for each frame recorded. The options for extraction have some differences. The automatic extraction do not store the additional needed timestamp information, and is not an option for extracting the data. Open3D has a manual method for reading timestamp data from a RGBD camera stream but not a position estimation stream, and pyRealsense have a method for reading timestamp data from both a RGBD camera and a position estimation camera. \ref{lst:TScomp} show how to acquire timestamp from footage using options available in Open3D and pyRealsense. Open3Ds manual extractor do not define how the timestamp values should be read, and has no familiar timestamp unit. Originally a standard timestamp counts seconds, or milliseconds,  from January 1st 1970. Open3Ds manual timestamp reader instead output values from 0 to x, where 0 is the start of the recorded session, and x is a value that if converted to seconds is some months into 1970, even though the recorded session spans over 11 seconds.  See \ref{section:timestampComp} exploring results from the two methods mentioned above. The method used in pyRealSense2 seemed to provide a more correct and stable result. The conclusion from this is that the pyRealSense2 is the only choice for extracting the bags color, depth, estimated position, and timestamp for each frame. Open3D do not have any options for reading a T265 file, by default a solution using pyRealSense2 would be needed. processPose(file, folder) found in \ref{lst:readSensor2} shows how one can extract the estimated position data from a bag file recording. It reads each frame and store its estimated position and timestamp in a list, then saves this list as a *.json file. The T265 tracking camera stores its estimated position as a quaternion, while Open3D prefer to use a 4x4 matrix for translations. Converting and storing the estimated position as a 4x4 translation matrix was preferred for easier insertion into the Reconstruction system pipeline. Finding the correct combination can be done by finding the pose with the closest timestamp. The options for extraction have some differences. The next issue were that the elected method for bag data extraction, using pyRealSense2, did not provide a sufficient output in the Reconstruction system pipeline. The cropping and re-scaling solution was found when exploring an alternative method of doing an image matching based on depth image data. Which simplified the bag extracting module. 
+
+
+
+\begin{wrapfigure}{r}{0.45\textwidth}
+    \includegraphics[width=0.45\textwidth]{figures/pc/missalignment.png}
+    \caption{Frame 0(purple)  and 150(blue) from the t11 project recording. The two frames need to be aligned so that they share the same world origin. [move this?]}
+    \centering
+    \label{fig:missalignment}
+\end{wrapfigure}
+
+
+
+
+\section{Module 3 - Reconstruction System}
+
+Module 3 will output three 3D-reconstructed models; one model derived from an unaltered Reconstruction system pipeline, one model derived from an altered Reconstruction system with insertion of pose data to neighbouring connections, and one model derived from an altered Reconstruction with insertion of pose data to all relations. Module 4 need a image set from the crack detection, and the output structure from Reconstruction System. 
+
+The Reconstruction system pipeline from Open3D have a main output placed in a folder named \textit{scene}. This folder will contain a 3d-model generated from the recorded session named \textit{integrated.ply}, a list of position and rotation for each frame used for generating the scene named \textit{trajectory.log}, and 4 files used for temporal storage of the position estimate. The Reconstruction system pipeline was run on a Windows 10 with [graphics card], [CPU] and 16GB RAM. 
+
+
+
+
+\subsection{Key input parameters}
+The parameters used for the three output goals can be seen at \ref{fig:example_config}. The output will with these parameter values provide an acceptable result. There were not spent enough time to tune these parameters, with more time spent, a better output might have been provided. Let it be noted that a larger \textit{max_depth} is preferable, setting this by too much will lead to a \textit{bad allocation} error, a memory leak. Adjust the depth accordingly. 
+\begin{wrapfigure}{r}{0.85\textwidth}
+    \centering
+    \includegraphics[width=0.83\textwidth]{figures/config_example.PNG}
+    \caption{A config.json example showing parameters for final output result with t11 example recording. }
+    \label{fig:example_config}
+\end{wrapfigure}
+
+\begin{wrapfigure}{r}{0.85\textwidth}
+    \centering
+    \includegraphics[width=0.83\textwidth]{figures/t11_without_pose.png}
+    \caption{Result from t11 with data from D435i}
+    \label{fig:t11_withoutPose}
+\end{wrapfigure}
+\subsection{Including position estimate data}
+The first step in the Reconstruction system, named Make Fragments, a pose graph is created for each fragment. An initial relation estimate must be created for each neighbouring pair and each key pose to other key poses. This initial relation estimate is handled by a function named \texttt{register\_one\_rgbd\_pair()}  which does an initial pair matching using \texttt{compute\_rgbd\_odometry()} which return three parameters; a Boolean defining whenever it is successful,  a transformation between the estimated camera positions and an info matrix. What is important is that this function have an input parameter which takes either an empty 4x4 matrix or an initial guess of position. This creates an opportunity for inserting the position estimate for the two poses. A soft insertion of poses were first tried to see how well they performed. This soft insertion were activated in neighbouring frame matching to see how well the algorithm handled smaller matching. The result on this can be seen at \ref{fig:t11_softPose}. This result is sufficient and prove that the position estimate works and is not colluding. Using the position estimate on all pairs did not create a sufficient model. This could be solved by adjusting parameters, but time constraint issues prevented further tuning. 
+
+\begin{wrapfigure}{r}{0.55\textwidth}
+    \centering
+    \includegraphics[width=0.53\textwidth]{figures/t11_with soft pose.png}
+    \caption{Result from t11 with data from D435i and T265 as soft insertion}
+    \label{fig:t11_softPose}
+\end{wrapfigure}
+
+
+
+
+
+\section{Module 4 - Applying semantic segmentation result onto model}
+
+
+With enough time in this project, applying semantic segmentation results onto a reconstructed model would be included. 
+
+Xu, et al. \cite{Xu2010} provide a general texture mapping framework for texturing image bases 3D-models. Their method emphasises on solving discontinuity due to errors from the 3D-reconstructions self-calibration process and colour/lighting difference among images from real-world uncontrolled environments. An alternaltive and more rudimentary solution for generating an UV map could be to use Blender 3D Python library.  Personal familiarity with Blender3D and lack of direct target of field would be the final deision for a solution by Willén \cite{Willen2016}, which provide a description of how to utilise the Blender 3D Python library for this exact purpose. This method provides a simple uv-map that separate triangles based on angle between two triangles, and joins any not separated into one group. The threshold angle can be set. Reconstruction system from Open3D exports the final model as a ply file, which has the texture map being a part of the model. 
+[MeshLab load ply model, Filters->Textures->Parameterization: Trivial Per-Triangle, Filters->Texture->Transfer Vertex Color to Texture, File->Export Mesh as(choose obj). This is not an optimal method, but will have converted the model to a requiered methd. Looking at the uv-map is not recommended as it has not structure. ]
+
+Projecting crack detection results onto the reconstructed 3d-model 
+[Alternative 1 - project marked area onto "blank canvas", then combine all projected data with more dots representing stronger end colour. Will give a more blurred answer.]
+[Alternative 2 - Switch out color frames with detection result and run step 4 in Reconstruction result,  Integrate scene, which takes the full data about how to reconstruct and takes the individual RGBD image. ]
+[Alternaltive 3 - ?]
+
+
+
+[refine text from last semester. Each crack detection image may then be projected from its frame position using the exported pose graph result as camera position. Each result will be stored as a layer in the uv-map with a color range in red (crack detected) to white (no crack found). The layers may then be combined to find their average value. A way to optimise the RGB result may be to use Open3Ds Color Map Optimization which bases itself on \cite{zhou2016}]
+
+
+
+
+\section{Precision in 3D-reconstruction}
+
+With enough time in this project, verification of the validity of the pipeline described in module 1 to 3 would be included in the project. This step would be needed for tuning the parameters used in module 3, and to compare the three methods used for inserting estimated position data from the T265. For this a ground truth would have to be created to compare any result towards, using a point cloud matching algorithm. Then for each result matching it up against the ground truth and find its deviance from ground truth. A HandySCAN 3D or similar device can be used for generating the ground truth, in this case access to a HandySCAN 3D were available during this thesis project and would provide an 0.03mm accuracy for the ground truth. No test was conducted, however a plan for this are described in the next paragraph. 
+
+A table of approximately 60 by 60 cm would be gridded up using tape with 10 cm from center to center of each tape. The table would be filled with a t-bar placed in the center, and 2 control items, one of the control items would be a cube of 10 cm height, and the second would be of more advanced shape, like a hand controller or similar. The table would then be scanned by the HandySCAN for generating the ground truth and cover all objects plus table edge. The table length and width will also be measured as an extra control measure. Next the RealSense camera rig would scan the table and contents, and include the table edge in its recorded sequence. The data can now be processed as described in module 3. There are several ways for comparing the result, software like CloudCompare \footnote{\url{https://www.danielgm.net/cc/}} have options for comparing results has been used in other projects \cite{Handa2014}. It is important to note that a the table and 10 cm cube is there for controlling and verifying the outputs size and scale. Any number of iterations with parameter variations for the Open3Ds Reconstruction system pipeline may then be performed to find the best input based on an optimal parameter range. 
+
